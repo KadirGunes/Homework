@@ -5,6 +5,10 @@
 #include <stdio.h>
 #include <syscall.h>
 
+#include <unistd.h> //new
+#include<stdlib.h> //new
+#include <stdbool.h> //new
+
 int
 main (int argc, char *argv[]) 
 {

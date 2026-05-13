@@ -1,6 +1,8 @@
 #include <stdio.h>
 #include <syscall.h>
 
+#include<stdlib.h> //new
+
 int
 main (int argc, char **argv)
 {
