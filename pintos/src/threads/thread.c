@@ -359,7 +359,7 @@ thread_try_yield(void)
   enum intr_level old_level = intr_disable(); 
   if(!list_empty(&ready_list))
   { 
-    struct list_elem* e = list_max(&ready_list, priority_list_less_func, NULL);
+    struct list_elem* e = list_begin(&ready_list);
     struct thread* t = list_entry(e, struct thread, elem);
 
     if(t->priority > thread_current()->priority) 
@@ -397,10 +397,17 @@ thread_set_priority (int new_priority)
   enum intr_level old_level = intr_disable();
 
   struct thread* cur = thread_current();
-  cur->priority = new_priority;
+  cur->original_priority = new_priority;
   
-  //if(cur->original_priority > cur->priority)  //hmm
-  //  cur->priority = cur->original_priority; //hmm
+  if(cur->waiting_lock != NULL || !list_empty(&cur->donations))
+  {
+    if(new_priority > cur->priority)
+      cur->priority = new_priority;
+  }
+  else
+  {
+    cur->priority = new_priority;
+  }
 
   intr_set_level(old_level);
   

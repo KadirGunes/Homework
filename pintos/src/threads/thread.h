@@ -91,7 +91,7 @@ struct thread
     int original_priority;
     struct list_elem allelem;           /* List element for all threads list. */
 
-    struct lock* waiting_lock;
+    struct lock* waiting_lock; //waiting lock lists??
     
     struct list donations;
     struct list_elem donations_elem;
@@ -140,6 +140,7 @@ void thread_try_yield(void);
 
 //değişir yeri
 list_less_func priority_list_less_func;
+list_less_func donation_list_less_func;
 
 /* Performs some operation on thread t, given auxiliary data AUX. */
 typedef void thread_action_func (struct thread *t, void *aux);

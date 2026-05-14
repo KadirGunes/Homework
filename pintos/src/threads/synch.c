@@ -68,7 +68,7 @@ sema_down (struct semaphore *sema)
   old_level = intr_disable ();
   while (sema->value == 0) 
     {
-      list_push_back (&sema->waiters, &thread_current ()->elem);
+      list_insert_ordered(&sema->waiters, &thread_current ()->elem, priority_list_less_func, NULL);
       thread_block ();
     }
   sema->value--;
@@ -113,11 +113,15 @@ sema_up (struct semaphore *sema)
   ASSERT (sema != NULL);
 
   old_level = intr_disable ();
-  if (!list_empty (&sema->waiters)) 
-    thread_unblock (list_entry (list_pop_front (&sema->waiters),
-                                struct thread, elem));
+  if (!list_empty (&sema->waiters))
+  {
+    thread_unblock(list_entry (list_pop_front (&sema->waiters), struct thread, elem));
+  }
+    
   sema->value++;
   intr_set_level (old_level);
+
+  thread_try_yield(); //very importan donate one için nedenini anla
 }
 
 static void sema_test_helper (void *sema_);
@@ -195,28 +199,54 @@ lock_acquire (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (!intr_context ());
   ASSERT (!lock_held_by_current_thread (lock));
-  //
-  //struct thread* cur = thread_current();
-  //if(lock->holder != NULL)
-  //{
-  //  cur->waiting_lock = lock;
-  //
-  //  struct thread* holder = lock->holder;
-  //  do
-  //  {
-  //    if(cur->priority > holder->priority)
-  //    {
-  //      holder->priority = cur->priority;
-  //      list_insert_ordered(&holder->donations, &cur->donations_elem, donation_list_less_func, NULL); //??
-  //    }
-  //
-  //    holder = holder->waiting_lock->holder;
-  //
-  //  } while (holder != NULL);
-  //}
+  
+  struct thread* holder = lock->holder;
+  if(holder != NULL)
+  {
+    enum intr_level oldLevel = intr_disable();
+
+    struct thread* cur = thread_current();
+    cur->waiting_lock = lock;
+    do
+    {
+      bool is_inserted_before = false;
+      struct list_elem* e_donation = list_begin(&holder->donations);
+      while (e_donation != list_end(&holder->donations))
+      {
+        struct thread* t_donation = list_entry(e_donation, struct thread, donations_elem);
+        if(t_donation == cur) {is_inserted_before = true; break;}
+
+        e_donation = list_next(e_donation);
+      }
+
+      if(!is_inserted_before)
+        list_insert_ordered(&holder->donations, &cur->donations_elem, donation_list_less_func, NULL);
+
+      if(!list_empty(&holder->donations))
+      {
+        struct list_elem* max = list_begin(&holder->donations);
+        struct thread* t_max = list_entry(max, struct thread, donations_elem);
+
+        if(t_max->priority > holder->priority)
+        {
+          holder->priority = t_max->priority;
+        }
+      }
+
+
+      if(holder->waiting_lock != NULL)
+        holder = holder->waiting_lock->holder;
+      else
+        break;
+  
+    } while (holder != NULL);
+
+    intr_set_level(oldLevel);
+  }
 
   sema_down (&lock->semaphore);
   lock->holder = thread_current ();
+  thread_current()->waiting_lock = NULL;
 }
 
 bool priority_list_less_func(const struct list_elem *a, const struct list_elem *b, void *aux)
@@ -224,7 +254,17 @@ bool priority_list_less_func(const struct list_elem *a, const struct list_elem *
   struct thread* t_a = list_entry(a, struct thread, elem);
   struct thread* t_b = list_entry(b, struct thread, elem);
 
-  if(t_a->priority >= t_b->priority) return true;
+  if(t_a->priority > t_b->priority) return true;
+  
+  return false;
+}
+
+bool donation_list_less_func(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  struct thread* t_a = list_entry(a, struct thread, donations_elem);
+  struct thread* t_b = list_entry(b, struct thread, donations_elem);
+
+  if(t_a->priority > t_b->priority) return true;
   
   return false;
 }
@@ -259,33 +299,39 @@ lock_release (struct lock *lock)
   ASSERT (lock != NULL);
   ASSERT (lock_held_by_current_thread (lock));
 
-//  struct list_elem* donation_traveller = list_begin(&thread_current()->donations);
-//  bool a = 0;
-//  while (donation_traveller != NULL)
-//  {
-//    struct thread* list_thread = list_entry(donation_traveller, struct thread, donations_elem);
-//
-//    if(list_thread->waiting_lock == lock)
-//    {
-//      list_thread->waiting_lock = NULL;
-//      donation_traveller = list_remove(donation_traveller);
-//      continue;
-//    }
-//
-//    donation_traveller = donation_traveller->next;
-//  }
-//  
-//  struct list_elem* max = list_max(&thread_current()->donations, donation_list_less_func, NULL);
-//  struct thread* t_max = list_entry(max, struct thread, donations_elem);
-//  
-//  if(t_max != NULL && t_max->priority > thread_current()->original_priority)
-//  {
-//    thread_current()->priority = t_max->priority;
-//  }
-//  else
-//  {
-//    thread_current()->priority = thread_current()->original_priority;
-//  }
+  enum intr_level oldLevel = intr_disable();
+
+  struct list_elem* donation_traveller = list_begin(&thread_current()->donations);
+  struct list_elem* temp;
+
+  while (donation_traveller != list_end(&thread_current()->donations))
+  {
+    temp = donation_traveller;
+    donation_traveller = list_next(donation_traveller);
+
+    struct thread* list_thread = list_entry(temp, struct thread, donations_elem);
+
+    if(list_thread->waiting_lock == lock)
+    {
+      list_thread->waiting_lock = NULL;
+      list_remove(temp);
+    }
+  }
+  
+  thread_current()->priority = thread_current()->original_priority;
+
+  if(!list_empty(&thread_current()->donations))
+  {
+    struct list_elem* max = list_begin(&thread_current()->donations);
+    struct thread* t_max = list_entry(max, struct thread, donations_elem);
+    
+    if(t_max->priority > thread_current()->original_priority)
+    {
+      thread_current()->priority = t_max->priority;
+    }
+  }
+  
+  intr_set_level(oldLevel);
 
   lock->holder = NULL;
   sema_up (&lock->semaphore);
