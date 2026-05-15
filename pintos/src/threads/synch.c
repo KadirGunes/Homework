@@ -115,6 +115,8 @@ sema_up (struct semaphore *sema)
   old_level = intr_disable ();
   if (!list_empty (&sema->waiters))
   {
+    //aslında list zaten sıralı neden tekrar sort yapmam lazım bilmiyorum.
+    list_sort(&sema->waiters, priority_list_less_func, NULL); 
     thread_unblock(list_entry (list_pop_front (&sema->waiters), struct thread, elem));
   }
     
