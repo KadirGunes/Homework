@@ -233,7 +233,7 @@ lock_acquire (struct lock *lock)
         }
       }
 
-
+      cur = holder;
       if(holder->waiting_lock != NULL)
         holder = holder->waiting_lock->holder;
       else
@@ -333,8 +333,8 @@ lock_release (struct lock *lock)
   
   intr_set_level(oldLevel);
 
-  lock->holder = NULL;
   sema_up (&lock->semaphore);
+  lock->holder = NULL;
 }
 
 /* Returns true if the current thread holds LOCK, false
@@ -396,11 +396,16 @@ cond_wait (struct condition *cond, struct lock *lock)
   ASSERT (!intr_context ());
   ASSERT (lock_held_by_current_thread (lock));
   
+  enum intr_level oldLevel = intr_disable();
+
   sema_init (&waiter.semaphore, 0);
-  list_push_back (&cond->waiters, &waiter.elem);
+  //list_insert_ordered (&cond->waiters, &waiter.elem, cond_list_less_func, NULL);
+  list_push_back(&cond->waiters, &waiter.elem);
   lock_release (lock);
   sema_down (&waiter.semaphore);
   lock_acquire (lock);
+
+  intr_set_level(oldLevel);
 }
 
 /* If any threads are waiting on COND (protected by LOCK), then
@@ -419,8 +424,10 @@ cond_signal (struct condition *cond, struct lock *lock UNUSED)
   ASSERT (lock_held_by_current_thread (lock));
 
   if (!list_empty (&cond->waiters)) 
-    sema_up (&list_entry (list_pop_front (&cond->waiters),
-                          struct semaphore_elem, elem)->semaphore);
+  {
+    list_sort(&cond->waiters, cond_list_less_func, NULL);    
+    sema_up (&list_entry (list_pop_front (&cond->waiters), struct semaphore_elem, elem)->semaphore);
+  }
 }
 
 /* Wakes up all threads, if any, waiting on COND (protected by
@@ -437,4 +444,23 @@ cond_broadcast (struct condition *cond, struct lock *lock)
 
   while (!list_empty (&cond->waiters))
     cond_signal (cond, lock);
+}
+
+bool cond_list_less_func(const struct list_elem *a, const struct list_elem *b, void *aux)
+{
+  struct semaphore_elem* sema_a = list_entry(a, struct semaphore_elem, elem);
+  struct semaphore_elem* sema_b = list_entry(b, struct semaphore_elem, elem);
+
+  if(list_empty(&sema_a->semaphore.waiters)) return false;
+  if(list_empty(&sema_b->semaphore.waiters)) return true;
+
+  struct list_elem* l_a = list_begin(&sema_a->semaphore.waiters);
+  struct list_elem* l_b = list_begin(&sema_b->semaphore.waiters);
+
+  struct thread* t_a = list_entry(l_a, struct thread, elem);
+  struct thread* t_b = list_entry(l_b, struct thread, elem);
+
+  if(t_a->priority > t_b->priority) return true;
+  
+  return false;
 }
