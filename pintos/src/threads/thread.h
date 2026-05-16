@@ -89,6 +89,9 @@ struct thread
     uint8_t *stack;                     /* Saved stack pointer. */
     int priority;                       /* Priority. */
     int original_priority;
+    
+    int nice;
+    
     struct list_elem allelem;           /* List element for all threads list. */
 
     struct lock* waiting_lock; //waiting lock lists??
@@ -108,6 +111,8 @@ struct thread
 
     /* Owned by thread.c. */
     unsigned magic;                     /* Detects stack overflow. */
+
+    int recent_cpu;
   };
 
 /* If false (default), use round-robin scheduler.
@@ -156,4 +161,8 @@ void thread_set_nice (int);
 int thread_get_recent_cpu (void);
 int thread_get_load_avg (void);
 
+void thread_update_load_avg(void);
+void thread_update_recent_cpu();
+void thread_recent_cpu_increment();
+void thread_update_priority(struct thread *t, void* aux);
 #endif /* threads/thread.h */
