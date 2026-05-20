@@ -99,8 +99,9 @@ struct thread
     struct list donations;
     struct list_elem donations_elem;
 
-    int64_t thread_thick_wait_time;
+    int64_t thread_tick_wait_time;
     struct list_elem sleep_elem;
+    
     /* Shared between thread.c and synch.c. */
     struct list_elem elem;              /* List element. */
 

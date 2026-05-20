@@ -123,7 +123,8 @@ sema_up (struct semaphore *sema)
   sema->value++;
   intr_set_level (old_level);
 
-  thread_try_yield(); //very importan donate one için nedenini anla
+  if(!intr_context())
+    thread_try_yield(); //very importan donate one için nedenini anla
 }
 
 static void sema_test_helper (void *sema_);

@@ -160,7 +160,7 @@ thread_tick (void)
 
       if(t_sleepy->status != THREAD_BLOCKED) continue;
 
-      if(--t_sleepy->thread_thick_wait_time <= 0)
+      if(--t_sleepy->thread_tick_wait_time <= 0)
       {
         thread_unblock(t_sleepy);
         list_remove(temp_sleepy);
@@ -240,7 +240,7 @@ thread_create (const char *name, int priority,
 
 void thread_add_sleep(int64_t ticks)
 {
-  thread_current()->thread_thick_wait_time = ticks;
+  thread_current()->thread_tick_wait_time = ticks;
   list_push_back(&sleep_list, &thread_current()->sleep_elem);
   thread_block();
 }
