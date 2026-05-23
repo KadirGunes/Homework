@@ -9,5 +9,5 @@ void exit (int status);
 
 int filesize (int fd);
 
-void exit (int status);
+int write (int fd, const void *buffer, unsigned size);
 #endif /* userprog/syscall.h */
