@@ -3,6 +3,7 @@
 #include <stddef.h>
 #include <random.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "threads/flags.h"
 #include "threads/interrupt.h"
@@ -228,6 +229,13 @@ thread_create (const char *name, int priority,
   sf->eip = switch_entry;
   sf->ebp = 0;
 
+  struct proc* p =  (struct proc*)malloc(sizeof(struct proc));
+  p->tid = tid;
+  p->exit_status = thread_current()->exit_status; 
+  p->used = false;
+
+  list_push_back(&thread_current()->processes, &p->elem);
+
   /* Add to run queue. */
   thread_unblock (t);
 
@@ -309,6 +317,24 @@ thread_current (void)
   return t;
 }
 
+struct thread *get_thread (tid_t thread_id)
+{
+  struct list_elem* t_elem = list_begin(&all_list);
+
+  struct thread* t;
+
+  while (t_elem != list_end(&all_list))
+  {
+    t = list_entry(t_elem, struct thread, allelem);
+
+    if(t->tid == thread_id) break;
+
+    t_elem = list_next(t_elem);
+  }
+
+  return t;
+}
+
 /* Returns the running thread's tid. */
 tid_t
 thread_tid (void) 
@@ -330,6 +356,13 @@ thread_exit (void)
   /* Remove thread from all threads list, set our status to dying,
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
+
+   while(!list_empty(&thread_current()->processes))
+   {
+      struct proc_file *f = list_entry(list_pop_front(&thread_current()->processes), struct proc, elem);
+      list_remove(f);
+   }
+    
   intr_disable ();
   list_remove (&thread_current()->allelem);
   thread_current ()->status = THREAD_DYING;
@@ -426,6 +459,42 @@ int
 thread_get_priority (void) 
 {
   return thread_current ()->priority;
+}
+
+void thread_sema_down(tid_t thread_id)
+{
+  struct list_elem* t_elem = list_begin(&all_list);
+
+  struct thread* t;
+
+  while (t_elem != list_end(&all_list))
+  {
+    t = list_entry(t_elem, struct thread, allelem);
+
+    if(t->tid == thread_id) break;
+
+    t_elem = list_next(t_elem);
+  }
+
+  sema_down(&t->wait_sema);  
+}
+
+void thread_sema_up(tid_t thread_id)
+{
+  struct list_elem* t_elem = list_begin(&all_list);
+
+  struct thread* t;
+
+  while (t_elem != list_end(&all_list))
+  {
+    t = list_entry(t_elem, struct thread, allelem);
+
+    if(t->tid == thread_id) break;
+
+    t_elem = list_next(t_elem);
+  }
+
+  sema_up(&t->wait_sema);
 }
 
 /* Sets the current thread's nice value to NICE. */
@@ -602,7 +671,14 @@ init_thread (struct thread *t, const char *name, int priority)
   t->nice = 0;
   t->recent_cpu = 0;
   t->magic = THREAD_MAGIC;
+  t->next_fd = 2;
+
+  list_init(&t->processes);
+  t->parent = running_thread();
+
   list_init(&t->donations);
+
+  sema_init(&t->wait_sema, 1);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

@@ -30,7 +30,9 @@
   process_execute (const char *file_name) 
   {
     char* fn_copy;
+    
     char* save_pointer;
+    char* temp_copy;
 
     tid_t tid;
 
@@ -42,12 +44,21 @@
       
     strlcpy (fn_copy, file_name, PGSIZE);
     
-    char* process_name = strtok_r(fn_copy, " ", &save_pointer);
+    temp_copy = (char*)malloc(strlen(file_name) + 1);
+    memcpy(temp_copy, file_name, strlen(file_name) + 1);
+
+    char* process_name = strtok_r(temp_copy, " ", &save_pointer);
 
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create (process_name, PRI_DEFAULT, start_process, fn_copy);
+
     if (tid == TID_ERROR)
       palloc_free_page (fn_copy); 
+    
+    //sema-down
+    thread_sema_down(tid);    
+    //
+
     return tid;
   }
 
@@ -71,8 +82,8 @@
     palloc_free_page (file_name);
     if (!success) 
       thread_exit ();
-
-    /* Start the user process by simulating a return from an
+    
+      /* Start the user process by simulating a return from an
       interrupt, implemented by intr_exit (in
       threads/intr-stubs.S).  Because intr_exit takes all of its
       arguments on the stack in the form of a `struct intr_frame',
@@ -94,7 +105,31 @@
   int
   process_wait (tid_t child_tid UNUSED) 
   {
-    return -1;
+    struct list_elem* e_p = list_begin(&thread_current()->processes);
+    struct proc* p = NULL;
+
+    while (e_p != list_end(&thread_current()->processes))
+    {
+      struct proc* f = list_entry(e_p, struct proc, elem);
+
+      if(f->tid == child_tid)
+      {
+        p = f;
+        break;
+      }
+
+      e_p = list_next(e_p);
+    }
+
+    if(p == NULL || p->used) return -1;
+
+    thread_sema_down(child_tid);
+
+    //struct thread* t = get_thread(child_tid);
+    int temp = p->exit_status;
+    list_remove(e_p);
+
+    return temp;
   }
 
   /* Free the current process's resources. */
@@ -103,6 +138,11 @@
   {
     struct thread *cur = thread_current ();
     uint32_t *pd;
+
+    printf("%s: exit(%d)\n", cur->name, cur->exit_status);
+
+    file_allow_write(thread_current()->executable);
+    file_close(thread_current()->executable);
 
     /* Destroy the current process's page directory and switch back
       to the kernel-only page directory. */
@@ -120,6 +160,8 @@
         pagedir_activate (NULL);
         pagedir_destroy (pd);
       }
+
+    thread_sema_up(cur->tid);
   }
 
   /* Sets up the CPU for running user code in the current
@@ -228,7 +270,13 @@
     process_activate ();
     
     /* Open executable file. */
-    file = filesys_open (file_name);
+    char * fn_cp = malloc (strlen(file_name)+1);
+    strlcpy(fn_cp, file_name, strlen(file_name)+1);
+    
+    char * save_ptr;
+    fn_cp = strtok_r(fn_cp," ",&save_ptr);
+
+    file = filesys_open (fn_cp);
     if (file == NULL) 
       {
         printf ("load: %s: open failed\n", file_name);
@@ -314,11 +362,14 @@
     /* Start address. */
     *eip = (void (*) (void)) ehdr.e_entry;
 
+    file_deny_write(file);
+    thread_current()->executable = file;
+
     success = true;
 
   done:
     /* We arrive here whether the load is successful or not. */
-    file_close (file);
+    //file_close (file);
     return success;
   }
   
@@ -462,7 +513,6 @@
 
       token = strtok_r(NULL, " ", &save_pointer);
     }
-
     
     int* argv = (int*)malloc(argc * sizeof(int));
     token = strtok_r(file_name, " ", &save_pointer); 
@@ -506,6 +556,8 @@
 
     *esp -= sizeof(int);
     memcpy(*esp, &null, sizeof(int*));
+
+    //hex_dump((uintptr_t)*esp, *esp, PHYS_BASE - *esp, true);
 
     return success;
   }

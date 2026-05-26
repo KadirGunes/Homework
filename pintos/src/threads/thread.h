@@ -4,6 +4,7 @@
 #include <debug.h>
 #include <list.h>
 #include <stdint.h>
+#include "threads/synch.h"
 
 /* States in a thread's life cycle. */
 enum thread_status
@@ -92,6 +93,16 @@ struct thread
     
     int nice;
     
+    struct semaphore wait_sema;
+    int exit_status;
+
+    struct file* files[8];
+    struct file* executable;
+    int next_fd;
+
+    struct list processes; 
+    struct thread* parent;
+
     struct list_elem allelem;           /* List element for all threads list. */
 
     struct lock* waiting_lock; //waiting lock lists??
@@ -116,6 +127,14 @@ struct thread
     int recent_cpu;
   };
 
+  struct proc 
+   {
+      int tid;
+      struct list_elem elem;
+      int exit_status;
+      bool used;
+   };
+
 /* If false (default), use round-robin scheduler.
    If true, use multi-level feedback queue scheduler.
    Controlled by kernel command-line option "-o mlfqs". */
@@ -136,6 +155,8 @@ void thread_block (void);
 void thread_unblock (struct thread *);
 
 struct thread *thread_current (void);
+struct thread *get_thread (tid_t thread_id);
+
 tid_t thread_tid (void);
 const char *thread_name (void);
 
@@ -154,6 +175,9 @@ void thread_foreach (thread_action_func *, void *);
 
 int thread_get_priority (void);
 void thread_set_priority (int);
+
+void thread_sema_down(tid_t thread_id);
+void thread_sema_up(tid_t thread_id);
 
 void thread_find_highest_priority (struct thread *t, void *aux); //eklendi
 
