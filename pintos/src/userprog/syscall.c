@@ -52,6 +52,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = process_wait(*((tid_t*)f->esp + 1));
     break;
   case SYS_EXIT:
+    is_ptr_valid((int*)f->esp + 1);
     //printf("%s: exit(%d)", thread_current()->name, *((int*)f->esp + 1));
     exit(*((int*)f->esp + 1));
     break;
@@ -70,28 +71,44 @@ syscall_handler (struct intr_frame *f UNUSED)
   case SYS_OPEN:
   {
     is_ptr_valid((const char *)(*((int*)f->esp + 1)));
+
     f->eax = open((const char *)(*((int*)f->esp + 1)));
     break;
   }
   case SYS_EXEC:
     is_ptr_valid((const char *)(*((int*)f->esp + 1)));
+
     f->eax = exec((const char *)(*((int*)f->esp + 1)));
     break;
   case SYS_CLOSE:
     close(*((int*)f->esp + 1));
+    break;
+  case SYS_REMOVE:
+    f->eax = remove((const char *)(*((int*)f->esp + 1)));
     break;
   case SYS_READ:
     is_ptr_valid((int*)f->esp + 1);
     is_ptr_valid((void*)(*((int*)f->esp + 2)));
     is_ptr_valid((unsigned*)f->esp + 3);
 
-    f->eax = read(*((int*)f->esp + 1), (void*)(*((int*)f->esp + 2)), *((unsigned*)f->esp + 3));
+    int fd = *((int*)f->esp + 1);
+    void* buffer = (void*)(*((int*)f->esp + 2));
+    unsigned size = *((unsigned*)f->esp + 3);  
+
+    char* buf = (char*)buffer;
+    for (unsigned i = 0; i < size; i++)
+        is_ptr_valid(buf + i);
+
+    f->eax = read(fd, buffer, size);
     break;
   case SYS_FILESIZE:
     f->eax = filesize(*((int*)f->esp + 1));
     break;
   case SYS_SEEK:
     seek(*((int*)f->esp + 1), *((unsigned*)f->esp + 2));
+    break;
+  case SYS_TELL:
+    f->eax = tell(*((int*)f->esp + 1));
     break;
   default:
     printf ("system call! %d\n", *(int*)f->esp);
@@ -114,7 +131,9 @@ pid_t exec (const char *cmd_line)
   char* save_pointer;
   temp = strtok_r(temp, " ", &save_pointer);
 
+  file_acquire_lock();
   struct file* f = filesys_open(temp); 
+  file_realese_lock();
 
   if(f == NULL)
   {
@@ -172,7 +191,11 @@ int write (int fd, const void *buffer, unsigned size)
 
   if(fd >= cur->next_fd) return 0;
 
-  return file_write(cur->files[fd - 2], buffer, size);
+  file_acquire_lock();
+  int _return = file_write(cur->files[fd - 2], buffer, size);
+  file_realese_lock();
+
+  return _return;
 }
 
 bool create (const char *file, unsigned initial_size)
@@ -207,6 +230,11 @@ void seek (int fd, unsigned position)
   file_seek(f, position);
 }
 
+unsigned tell (int fd)
+{
+  return file_tell(thread_current()->files[fd - 2]);
+}
+
 int filesize (int fd)
 {
   struct file* f = thread_current()->files[fd - 2];
@@ -223,6 +251,11 @@ void close (int fd)
  file_close(t->files[fd - 2]); 
 
  t->files[fd - 2] = NULL;
+}
+
+bool remove (const char *file)
+{
+  return filesys_remove(file);
 }
 
 int read (int fd, void *buffer, unsigned size)
@@ -247,7 +280,11 @@ int read (int fd, void *buffer, unsigned size)
 
   if(fd >= cur->next_fd) return -1;
 
-  return file_read(cur->files[fd - 2], buffer, size);
+  file_acquire_lock();
+  int _return = file_read(cur->files[fd - 2], buffer, size);
+  file_realese_lock();
+
+  return _return; 
 }
 
 void is_ptr_valid(const void* ptr)

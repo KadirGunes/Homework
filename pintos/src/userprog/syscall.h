@@ -24,5 +24,9 @@ int filesize (int fd);
 
 void seek (int fd, unsigned position);
 
+unsigned tell (int fd);
+
 void close (int fd);
+
+bool remove (const char *file);
 #endif /* userprog/syscall.h */

@@ -42,6 +42,8 @@ static struct thread *initial_thread;
 /* Lock used by allocate_tid(). */
 static struct lock tid_lock;
 
+static struct lock file_lock;
+
 /* Stack frame for kernel_thread(). */
 struct kernel_thread_frame 
   {
@@ -97,6 +99,7 @@ thread_init (void)
   ASSERT (intr_get_level () == INTR_OFF);
 
   lock_init (&tid_lock);
+  lock_init (&file_lock);
   list_init (&ready_list);
   list_init (&all_list);
   list_init (&sleep_list);
@@ -798,3 +801,13 @@ allocate_tid (void)
 /* Offset of `stack' member within `struct thread'.
    Used by switch.S, which can't figure it out on its own. */
 uint32_t thread_stack_ofs = offsetof (struct thread, stack);
+
+void file_acquire_lock()
+{
+  lock_acquire(&file_lock);
+}
+
+void file_realese_lock()
+{
+  lock_release(&file_lock);
+}

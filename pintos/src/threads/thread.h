@@ -190,4 +190,8 @@ void thread_update_load_avg(void);
 void thread_update_recent_cpu();
 void thread_recent_cpu_increment();
 void thread_update_priority(struct thread *t, void* aux);
+
+void file_acquire_lock();
+void file_realese_lock();
+
 #endif /* threads/thread.h */

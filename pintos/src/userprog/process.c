@@ -51,6 +51,7 @@
 
     /* Create a new thread to execute FILE_NAME. */
     tid = thread_create (process_name, PRI_DEFAULT, start_process, fn_copy);
+    free(temp_copy);
 
     if (tid == TID_ERROR)
       palloc_free_page (fn_copy); 
@@ -72,6 +73,7 @@
     bool success;
 
     /* Initialize interrupt frame and load executable. */
+    
     memset (&if_, 0, sizeof if_);
     if_.gs = if_.fs = if_.es = if_.ds = if_.ss = SEL_UDSEG;
     if_.cs = SEL_UCSEG;
@@ -128,6 +130,7 @@
     //struct thread* t = get_thread(child_tid);
     int temp = p->exit_status;
     list_remove(e_p);
+    free(p);
 
     return temp;
   }
@@ -141,8 +144,13 @@
 
     printf("%s: exit(%d)\n", cur->name, cur->exit_status);
 
-    file_allow_write(thread_current()->executable);
-    file_close(thread_current()->executable);
+    file_acquire_lock();
+    if(thread_current()->executable != NULL)
+    {
+      file_allow_write(thread_current()->executable);
+      file_close(thread_current()->executable);
+    }
+    file_realese_lock();
 
     /* Destroy the current process's page directory and switch back
       to the kernel-only page directory. */
@@ -263,6 +271,7 @@
     bool success = false;
     int i;
 
+    //file_acquire_lock();
     /* Allocate and activate page directory. */
     t->pagedir = pagedir_create ();
     if (t->pagedir == NULL) 
@@ -277,6 +286,7 @@
     fn_cp = strtok_r(fn_cp," ",&save_ptr);
 
     file = filesys_open (fn_cp);
+
     if (file == NULL) 
       {
         printf ("load: %s: open failed\n", file_name);
@@ -370,6 +380,7 @@
   done:
     /* We arrive here whether the load is successful or not. */
     //file_close (file);
+    //file_realese_lock();
     return success;
   }
   
