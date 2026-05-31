@@ -361,11 +361,11 @@ thread_exit (void)
      and schedule another process.  That process will destroy us
      when it calls thread_schedule_tail(). */
 
-   while(!list_empty(&thread_current()->processes))
-   {
-      struct proc_file *f = list_entry(list_pop_front(&thread_current()->processes), struct proc, elem);
-      list_remove(f);
-   }
+   //while(!list_empty(&thread_current()->processes))
+   //{
+   //   struct proc_file *f = list_entry(list_pop_front(&thread_current()->processes), struct proc, elem);
+   //   list_remove(f);
+   //}
     
   intr_disable ();
   list_remove (&thread_current()->allelem);
@@ -682,7 +682,7 @@ init_thread (struct thread *t, const char *name, int priority)
 
   list_init(&t->donations);
 
-  sema_init(&t->wait_sema, 1);
+  sema_init(&t->wait_sema, 0);
 
   old_level = intr_disable ();
   list_push_back (&all_list, &t->allelem);

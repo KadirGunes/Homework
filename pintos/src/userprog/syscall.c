@@ -126,6 +126,9 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = tell(*((int*)f->esp + 1));
     file_realese_lock();
     break;
+  case SYS_HALT:
+    halt();
+    break;
   default:
     printf ("system call! %d\n", *(int*)f->esp);
     thread_exit ();
@@ -181,7 +184,7 @@ void exit (int status)
     
     if(f->tid == thread_current()->tid)
     {
-      f->used = true; //??
+      //f->used = true;
       f->exit_status = status;
       break;
     }
@@ -192,9 +195,8 @@ void exit (int status)
   intr_set_level(old_level);
   
   thread_current()->exit_status = status;
+  thread_sema_up(thread_current()->tid);
 
-  thread_sema_up(&thread_current()->parent->tid);
- 
   thread_exit();
 }
 

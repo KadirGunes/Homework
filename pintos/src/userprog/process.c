@@ -57,7 +57,7 @@
       palloc_free_page (fn_copy); 
     
     //sema-down
-    thread_sema_down(tid);    
+    //thread_sema_down(tid);    
     //
     return tid;
   }
@@ -110,10 +110,11 @@
 
     struct list_elem* e_p = list_begin(&thread_current()->processes);
     struct proc* p = NULL;
+    struct proc* f;
 
     while (e_p != list_end(&thread_current()->processes))
     {
-      struct proc* f = list_entry(e_p, struct proc, elem);
+      f = list_entry(e_p, struct proc, elem);
 
       if(f->tid == child_tid)
       {
@@ -123,16 +124,19 @@
 
       e_p = list_next(e_p);
     }
+    intr_set_level(old_level);
+
 
     if(p == NULL || p->used) return -1;
 
+    p->used = true;
+
     thread_sema_down(child_tid);
+
     int temp = p->exit_status;
     list_remove(e_p);
     free(p);
 
-    intr_set_level(old_level);
-    
     return temp;
   }
 
