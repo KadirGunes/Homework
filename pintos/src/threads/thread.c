@@ -234,6 +234,7 @@ thread_create (const char *name, int priority,
 
   struct proc* p =  (struct proc*)malloc(sizeof(struct proc));
   p->tid = tid;
+  sema_init(&p->wait_sema, 0);
   p->exit_status = thread_current()->exit_status; 
   p->used = false;
 
@@ -804,10 +805,31 @@ uint32_t thread_stack_ofs = offsetof (struct thread, stack);
 
 void file_acquire_lock()
 {
+  if(file_lock.holder == thread_current()) return;
+
+  bool result = false;
+
+  struct list_elem* e_f = list_begin(&file_lock.semaphore.waiters);
+
+  while (e_f != list_end(&file_lock.semaphore.waiters))
+  {
+    struct thread* t = list_entry(e_f, struct thread, elem);
+    
+    if(t == thread_current())
+    {
+      result = true;
+      break;
+    }
+  }
+
+  if(result) return;
+
   lock_acquire(&file_lock);
 }
 
 void file_realese_lock()
 {
+  if(thread_current() != file_lock.holder) return;
+
   lock_release(&file_lock);
 }

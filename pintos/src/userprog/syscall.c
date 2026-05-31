@@ -18,6 +18,8 @@
 
 #include "userprog/process.h"
 
+static struct lock file_lock;
+
 static void syscall_handler (struct intr_frame *);
 
 void is_ptr_valid(const void* ptr);
@@ -53,7 +55,7 @@ syscall_handler (struct intr_frame *f UNUSED)
     break;
   case SYS_EXIT:
     is_ptr_valid((int*)f->esp + 1);
-    //printf("%s: exit(%d)", thread_current()->name, *((int*)f->esp + 1));
+    
     exit(*((int*)f->esp + 1));
     break;
   case SYS_CREATE:
@@ -65,14 +67,18 @@ syscall_handler (struct intr_frame *f UNUSED)
 
     if(file == NULL) exit(-1);
 
+    file_acquire_lock();
     f->eax = create(file, *size);
+    file_realese_lock();
     break;
   }
   case SYS_OPEN:
   {
     is_ptr_valid((const char *)(*((int*)f->esp + 1)));
 
+    file_acquire_lock();
     f->eax = open((const char *)(*((int*)f->esp + 1)));
+    file_realese_lock();
     break;
   }
   case SYS_EXEC:
@@ -81,10 +87,14 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = exec((const char *)(*((int*)f->esp + 1)));
     break;
   case SYS_CLOSE:
+    file_acquire_lock();
     close(*((int*)f->esp + 1));
+    file_realese_lock();
     break;
   case SYS_REMOVE:
+    file_acquire_lock();
     f->eax = remove((const char *)(*((int*)f->esp + 1)));
+    file_realese_lock();
     break;
   case SYS_READ:
     is_ptr_valid((int*)f->esp + 1);
@@ -102,13 +112,19 @@ syscall_handler (struct intr_frame *f UNUSED)
     f->eax = read(fd, buffer, size);
     break;
   case SYS_FILESIZE:
+    file_acquire_lock();
     f->eax = filesize(*((int*)f->esp + 1));
+    file_realese_lock();
     break;
   case SYS_SEEK:
+    file_acquire_lock();
     seek(*((int*)f->esp + 1), *((unsigned*)f->esp + 2));
+    file_realese_lock();
     break;
   case SYS_TELL:
+    file_acquire_lock();
     f->eax = tell(*((int*)f->esp + 1));
+    file_realese_lock();
     break;
   default:
     printf ("system call! %d\n", *(int*)f->esp);
@@ -124,6 +140,7 @@ void halt (void)
 
 pid_t exec (const char *cmd_line)
 {
+  file_acquire_lock();
   char* temp = (char*)malloc(strlen(cmd_line) + 1);
 
   memcpy(temp, cmd_line, strlen(cmd_line) + 1);
@@ -131,16 +148,16 @@ pid_t exec (const char *cmd_line)
   char* save_pointer;
   temp = strtok_r(temp, " ", &save_pointer);
 
-  file_acquire_lock();
   struct file* f = filesys_open(temp); 
-  file_realese_lock();
 
   if(f == NULL)
   {
+    file_realese_lock();
     return -1;
   }
 
   file_close(f);
+  file_realese_lock();
 
   return process_execute(cmd_line);
 }
@@ -153,11 +170,14 @@ void exit (int status)
     thread_exit();
   }
 
+  enum intr_level old_level = intr_disable(); 
+
   struct list_elem* e_p = list_begin(&thread_current()->parent->processes);
+  struct proc* f;
 
   while (e_p != list_end(&thread_current()->parent->processes))
   {
-    struct proc* f = list_entry(e_p, struct proc, elem);
+    f = list_entry(e_p, struct proc, elem);
     
     if(f->tid == thread_current()->tid)
     {
@@ -169,10 +189,12 @@ void exit (int status)
     e_p = list_next(e_p);
   }
 
+  intr_set_level(old_level);
+  
   thread_current()->exit_status = status;
 
-  thread_sema_up(&thread_current()->parent->wait_sema);
-
+  thread_sema_up(&thread_current()->parent->tid);
+ 
   thread_exit();
 }
 

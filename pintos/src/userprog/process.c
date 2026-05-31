@@ -59,7 +59,6 @@
     //sema-down
     thread_sema_down(tid);    
     //
-
     return tid;
   }
 
@@ -107,6 +106,8 @@
   int
   process_wait (tid_t child_tid UNUSED) 
   {
+    enum intr_level old_level = intr_disable(); 
+
     struct list_elem* e_p = list_begin(&thread_current()->processes);
     struct proc* p = NULL;
 
@@ -126,12 +127,12 @@
     if(p == NULL || p->used) return -1;
 
     thread_sema_down(child_tid);
-
-    //struct thread* t = get_thread(child_tid);
     int temp = p->exit_status;
     list_remove(e_p);
     free(p);
 
+    intr_set_level(old_level);
+    
     return temp;
   }
 
@@ -143,14 +144,16 @@
     uint32_t *pd;
 
     printf("%s: exit(%d)\n", cur->name, cur->exit_status);
-
-    file_acquire_lock();
+    
     if(thread_current()->executable != NULL)
     {
+      file_acquire_lock();
+      
       file_allow_write(thread_current()->executable);
       file_close(thread_current()->executable);
+
+      file_realese_lock();
     }
-    file_realese_lock();
 
     /* Destroy the current process's page directory and switch back
       to the kernel-only page directory. */
@@ -285,7 +288,9 @@
     char * save_ptr;
     fn_cp = strtok_r(fn_cp," ",&save_ptr);
 
+    file_acquire_lock();
     file = filesys_open (fn_cp);
+    file_realese_lock();
 
     if (file == NULL) 
       {

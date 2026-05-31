@@ -130,6 +130,7 @@ struct thread
   struct proc 
    {
       int tid;
+      struct semaphore wait_sema;
       struct list_elem elem;
       int exit_status;
       bool used;
