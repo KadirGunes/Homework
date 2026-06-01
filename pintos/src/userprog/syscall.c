@@ -195,8 +195,8 @@ void exit (int status)
   intr_set_level(old_level);
   
   thread_current()->exit_status = status;
-  thread_sema_up(thread_current()->tid);
-
+  //thread_sema_up(thread_current()->tid);
+  sema_up(&f->wait_sema);
   thread_exit();
 }
 

@@ -57,7 +57,7 @@
       palloc_free_page (fn_copy); 
     
     //sema-down
-    //thread_sema_down(tid);    
+    thread_sema_down(tid);    
     //
     return tid;
   }
@@ -131,8 +131,8 @@
 
     p->used = true;
 
-    thread_sema_down(child_tid);
-
+    //thread_sema_down(child_tid);
+    sema_down(&p->wait_sema);
     int temp = p->exit_status;
     list_remove(e_p);
     free(p);
